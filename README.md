@@ -6,4 +6,4 @@ The pyzbar version was unsuccessful because the library often couldn't find the 
 
 You are supposed to decode the qr using your phone, the script will read the text file and go through the elements.
 
-I use an iPhone, so I created a [shortcut](qr_to_sql/qr to sql.shortcut) for this, this shortcut I attached in the repository.
+I use an iPhone, so I created a [shortcut](qr_to_sql.shortcut) for this, this shortcut I attached in the repository.
