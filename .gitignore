@@ -1,0 +1,5 @@
+setup.py
+__pycache__
+sqlbills.egg-info
+qr-to-sql-with-modul.ipynb
+sql-explore.ipynb
