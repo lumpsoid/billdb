@@ -202,7 +202,7 @@ def process_actions(args):
                 qr_txt = f.read().split('\n')
             qr_txt = set(qr_txt)
         except IOError:
-            print("Error reading qr file.")
+            raise FileExistsError("Error reading qr file.")
 
         for qr_link in qr_txt:
             bill = Bill().from_qr(qr_link)
