@@ -1,3 +1,4 @@
+#!/bin/python
 import argparse
 import os
 import re
@@ -232,9 +233,16 @@ def args_init():
         required=True,
     )
     parser.add_argument(
-        "--from-qr", 
+        '-q', "--from-qr", 
         help="Read txt file with URL form qr and parse it to the database.",
         metavar='PATH',
+        default=None,
+        required=False
+    )
+    parser.add_argument(
+        '-i', "--insert-bill", 
+        help="Insert bill from terminal.",
+        action='store_true',
         default=None,
         required=False
     )
@@ -254,7 +262,7 @@ def args_init():
         '--price', 
         help="Overall price of the bill.",
         default=None,
-        type=int,
+        type=float,
         required=False
     )
     parser.add_argument(
