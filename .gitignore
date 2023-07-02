@@ -3,3 +3,6 @@ __pycache__
 sqlbills.egg-info
 qr-to-sql-with-modul.ipynb
 sql-explore.ipynb
+.ipynb_checkpoints
+sql-explore.py
+untitled

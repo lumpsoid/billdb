@@ -1,4 +1,3 @@
-#!/bin/python
 import argparse
 import os
 import re
@@ -9,7 +8,6 @@ from typing import List, Union
 import requests
 from bs4 import BeautifulSoup
 from lxml import etree
-
 
 def is_valid_time(time_string):
     '''
@@ -75,16 +73,14 @@ class Bill:
             price: Union[int, None] = None,
             currency: Union[str, None] = None,
             country: Union[str, None] = None,
-            items: List[Item] = None,
-            tags: List[str] = None
+            items: Union[List[Item], None] = None,
+            tags: Union[List[str], None] = None
     ):
 
         if path_to_db and not Bill.connector:
             Bill.connect_to_sqlite(path_to_db)
         if items is None:
             items = []
-        if tags is None:
-            tags = []
         
         if date and not is_valid_time(date):
             raise ValueError('date must be in ISO format YYYY-MM-DD')
@@ -105,12 +101,6 @@ class Bill:
         params = f'timestamp: {self.timestamp}\nname: {self.name}\ndate: {self.date}\nprice: {self.price}\ncurrency: {self.currency}\ncountry: {self.country}\nitems: {self.items}\ntags: {self.tags}\n'
         return params
 
-
-    def add_tag(self, tag: str) -> object:
-        self.tags.append(tag)
-        return self
-
-
     def add_item(self, item: Item) -> object:
         self.items.append(item)
         return self
@@ -121,8 +111,8 @@ class Bill:
 
     
     def from_qr(self, link) -> object:
-        response = requests.get(link, timeout=60)
         print(link)
+        response = requests.get(link, timeout=60)
         print('status code:', response.status_code)
 
         # Parse the HTML content
@@ -147,7 +137,7 @@ class Bill:
         # bill_img = dom.xpath('//*[@id="collapse1"]/div/pre/img')[0].attrib.get('src')
         bill_text = bill[0].text
         self.add_item(Item('',bill_text,0,0))
-        print(bill_text[:50])
+        print(bill_text)
         return self
     
 
@@ -168,24 +158,23 @@ class Bill:
             raise ValueError('currency must be specified')
         if self.country is None:
             raise ValueError('country must be specified')
+        if self.tags is None:
+            raise ValueError('tags must be specified')
 
         cursor = Bill.connector.cursor()
 
-        cursor.execute('INSERT INTO bills (id, name, dates, price) VALUES (?,?,?,?)', (self.timestamp, self.name, self.date, self.price,))
-        cursor.execute('INSERT INTO currency (id, currency, place) VALUES (?,?,?)', (self.timestamp, self.currency, self.country,))
+        cursor.execute(
+                'INSERT INTO bills (id, name, dates, price, currency, country, tag) VALUES (?,?,?,?,?,?,?)',
+                (self.timestamp, self.name, self.date, self.price, self.currency, self.country, self.tags)
+        )
         if self.items != []:
             for item in self.items:
-                cursor.execute('INSERT INTO items (id, photo, name, price, price_kg) VALUES (?,?,?,?,?)', (self.timestamp, item.photo_path, item.name, item.price, item.price_kg,))
+                cursor.execute(
+                        'INSERT INTO items (id, photo, name, price, price_kg) VALUES (?,?,?,?,?)',
+                        (self.timestamp, item.photo_path, item.name, item.price, item.price_kg,)
+                )
         else:
             print('items are empty.')
-        if self.tags != [] or self.tags != ['']:
-            for tag in self.tags:
-                if tag == '':
-                    print('empty tag.')
-                    continue
-                cursor.execute('INSERT INTO tags (id, tag) VALUES (?,?)', (self.timestamp, tag,))
-        else:
-            print('tags are empty.')
         
         Bill.connector.commit()
         cursor.close()
@@ -195,18 +184,30 @@ class Bill:
 def process_actions(args):
     expanded_path = os.path.expanduser(args.database)
     Bill.connect_to_sqlite(expanded_path)
-
+    
     if args.from_qr:
         try:
             with open(args.from_qr, 'r', encoding='utf-8') as f:
-                qr_txt = f.read().split('\n')
-            qr_txt = set(qr_txt)
+                qr_txt = f.readlines()
         except IOError:
             raise FileExistsError("Error reading qr file.")
 
+        qr_txt = set(qr_txt)
         for qr_link in qr_txt:
+            qr_link = qr_link.rstrip('\n')
             bill = Bill().from_qr(qr_link)
-            bill.tags = input('write tag in [tag1,tag2,tag3] manner.\n> ').split(',')
+            bill.tags = input('write tag in <tag1,tag2,tag3> manner.\n> ')
+            bill.tags = bill.tags.strip()
+            
+            input_currencty = input('write the currency of this bill (default: rsd).\n> ').strip()
+            if input_currencty == "":
+                input_currencty = 'rsd'
+            bill.currency = input_currencty
+            
+            input_country = input('write the country of this bill (default: serbia).\n> ').strip()
+            if input_country == "":
+                input_country = 'serbia'
+            bill.country = input_country
             bill.insert()
     
     elif args.insert_bill:
@@ -216,7 +217,7 @@ def process_actions(args):
             price=args.price,
             currency=args.currency,
             country=args.country,
-            tags=args.tags.split(',')
+            tags=args.tags
         )
         bill.insert()
 
