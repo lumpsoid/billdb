@@ -6,3 +6,5 @@ sql-explore.ipynb
 .ipynb_checkpoints
 sql-explore.py
 untitled
+notebooks
+build/

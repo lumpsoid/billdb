@@ -4,9 +4,9 @@ import re
 import sqlite3
 import time
 from typing import List, Union
+import json
 
 import requests
-from bs4 import BeautifulSoup
 from lxml import etree
 
 def is_valid_time(time_string):
@@ -25,18 +25,20 @@ class Item:
             self,
             photo_path: Union[str, None] = None,
             name: Union[str, None] = None,
-            price: Union[int, None] = None,
-            price_kg: Union[int, None] = None
+            price: Union[float, None] = None,
+            price_one: Union[int, None] = None,
+            quantity: Union[int, None] = None
     ):
         self.photo_path = photo_path
         self.name = name
         self.price = price
-        self.price_kg = price_kg
+        self.price_one = price_one
+        self.quantity = quantity
 
 
     def __repr__(self):
         # params = vars(self)
-        params = f'name: {self.name}\nprice: {self.price}\nprice_kg: {self.price_kg}\nphoto_path: {self.photo_path}'
+        params = f'name: {self.name}\nprice: {self.price}\nprice_one: {self.price_one}\nquantity: {self.quantity}\nphoto_path: {self.photo_path}'
         return params
 
 
@@ -44,11 +46,13 @@ class Item:
         if self.photo_path is None:
             self.photo_path = ''
         if self.name is None:
-            self.photo_path = ''
+            self.name = ''
         if self.price is None:
             self.price = 0
-        if self.price_kg is None:
-            self.price_kg = 0
+        if self.price_one is None:
+            self.price_one = 0
+        if self.quantity is None:
+            self.quantity = 1
         return self
 
 
@@ -74,7 +78,7 @@ class Bill:
             currency: Union[str, None] = None,
             country: Union[str, None] = None,
             items: Union[List[Item], None] = None,
-            tags: Union[List[str], None] = None
+            tags: Union[str, None] = None
     ):
 
         if path_to_db and not Bill.connector:
@@ -86,7 +90,7 @@ class Bill:
             raise ValueError('date must be in ISO format YYYY-MM-DD')
 
         self.db = path_to_db
-        self.timestamp = time.strftime("%Y%m%d%H%M%S", time.localtime())
+        self.timestamp = time.time_ns()
         self.name = name
         self.date = date
         self.price = price
@@ -94,14 +98,23 @@ class Bill:
         self.country = country
         self.items = items
         self.tags = tags
+        self.link = None
+        self.bill_text = None
 
 
     def __repr__(self):
         # params = vars(self)
-        params = f'timestamp: {self.timestamp}\nname: {self.name}\ndate: {self.date}\nprice: {self.price}\ncurrency: {self.currency}\ncountry: {self.country}\nitems: {self.items}\ntags: {self.tags}\n'
+        params = f'timestamp: {self.timestamp}\nname: {self.name}\ndate: {self.date}\nprice: {self.price}\ncurrency: {self.currency}\ncountry: {self.country}\nitems: {len(self.items)}\ntags: {self.tags}\nlink: {self.link}'
         return params
 
-    def add_item(self, item: Item) -> object:
+    def add_item(self, name, price, price_one, quantity, photo_path=None) -> object:
+        item = Item(
+            name=name,
+            price=price,
+            price_one=price_one,
+            quantity=quantity,
+            photo_path=photo_path
+        )
         self.items.append(item)
         return self
 
@@ -111,33 +124,66 @@ class Bill:
 
     
     def from_qr(self, link) -> object:
-        print(link)
+        self.link = link
         response = requests.get(link, timeout=60)
         print('status code:', response.status_code)
 
         # Parse the HTML content
-        soup = BeautifulSoup(response.content, 'lxml')
-        dom = etree.HTML(str(soup))
+        dom = etree.HTML(response.content)
         
+        token_xpath = '/html/head/script[5]'
+        invoce_xpath = '//*[@id="invoiceNumberLabel"]'
+        price_xpath = '//*[@id="totalAmountLabel"]'
+        buy_date_xpath = '//*[@id="sdcDateTimeLabel"]'
+        bill_xpath = '//*[@id="collapse3"]/div/pre'
+
         re_site_junk = re.compile(r'\r\n\s+')        
 
         self.name = dom.xpath('//*[@id="shopFullNameLabel"]')[0].text
 
-        price = dom.xpath('//*[@id="totalAmountLabel"]')[0].text
+        price = dom.xpath(price_xpath)[0].text
         self.price = float(price.replace('.','').replace(',','.'))
 
         date_format = "%d.%m.%Y." # format of the date string
-        buy_date = dom.xpath('//*[@id="sdcDateTimeLabel"]')[0].text
+        buy_date = dom.xpath(buy_date_xpath)[0].text
         buy_date = re_site_junk.sub('', buy_date)
         buy_date = buy_date.split(' ')[0]
         buy_date = time.strptime(buy_date, date_format)
         self.date = time.strftime("%Y-%m-%d", buy_date)
 
-        bill = dom.xpath('//*[@id="collapse3"]/div/pre')
+        bill = dom.xpath(bill_xpath)
+        if len(bill) == 0:
+            self.bill_text = "check"
+        else:
+            self.bill_text = bill[0].text
         # bill_img = dom.xpath('//*[@id="collapse1"]/div/pre/img')[0].attrib.get('src')
-        bill_text = bill[0].text
-        self.add_item(Item('',bill_text,0,0))
-        print(bill_text)
+        self.currency = 'rsd'
+        self.country = 'serbia'
+        # items fetching
+        token = re.search(r"viewModel\.Token\('(.*)'\);", dom.xpath(token_xpath)[0].text).group(1)
+        invoce_num = dom.xpath(invoce_xpath)[0].text.strip(' \r\n')
+        data_post = {
+            "invoiceNumber": invoce_num,
+            "token": token
+        }
+        post_r = requests.post('https://suf.purs.gov.rs//specifications', data=data_post)
+        time.sleep(0.1)
+        post_r = requests.post('https://suf.purs.gov.rs//specifications', data=data_post)
+        json_data = json.loads(post_r.content.decode('utf-8'))
+        if json_data.get('Success') is False:
+            print("Items was not fetched.", link)
+            print('Retring...')
+            post_r = requests.post('https://suf.purs.gov.rs//specifications', data=data_post)
+            json_data = json.loads(post_r.content.decode('utf-8'))
+
+        items = json_data.get('Items')
+        for item in items:
+            self.add_item(
+                name=item.get('Name'),
+                price=item.get('Total'),
+                price_one=item.get('UnitPrice'),
+                quantity=item.get('Quantity')
+            )
         return self
     
 
@@ -159,19 +205,22 @@ class Bill:
         if self.country is None:
             raise ValueError('country must be specified')
         if self.tags is None:
-            raise ValueError('tags must be specified')
+            if self.link is None:
+                raise ValueError('tags must be specified')
+            self.tags = ""
 
         cursor = Bill.connector.cursor()
 
         cursor.execute(
-                'INSERT INTO bills (id, name, dates, price, currency, country, tag) VALUES (?,?,?,?,?,?,?)',
-                (self.timestamp, self.name, self.date, self.price, self.currency, self.country, self.tags)
+                'INSERT INTO bills (id, name, dates, price, currency, country, tag, link, bill) VALUES (?,?,?,?,?,?,?,?,?)',
+                (self.timestamp, self.name, self.date, self.price, self.currency, self.country, self.tags, self.link, self.bill_text,)
         )
         if self.items != []:
+            insert_query = 'INSERT INTO items (id, name, price, price_one, quantity) VALUES (?,?,?,?,?)'
             for item in self.items:
                 cursor.execute(
-                        'INSERT INTO items (id, photo, name, price, price_kg) VALUES (?,?,?,?,?)',
-                        (self.timestamp, item.photo_path, item.name, item.price, item.price_kg,)
+                        insert_query,
+                        (self.timestamp, item.name, item.price, item.price_one, item.quantity,)
                 )
         else:
             print('items are empty.')
@@ -192,23 +241,43 @@ def process_actions(args):
         except IOError:
             raise FileExistsError("Error reading qr file.")
 
-        qr_txt = set(qr_txt)
+        qr_txt = list(set(qr_txt))
         for qr_link in qr_txt:
             qr_link = qr_link.rstrip('\n')
             bill = Bill().from_qr(qr_link)
-            bill.tags = input('write tag in <tag1,tag2,tag3> manner.\n> ')
-            bill.tags = bill.tags.strip()
-            
-            input_currencty = input('write the currency of this bill (default: rsd).\n> ').strip()
-            if input_currencty == "":
-                input_currencty = 'rsd'
-            bill.currency = input_currencty
-            
-            input_country = input('write the country of this bill (default: serbia).\n> ').strip()
-            if input_country == "":
-                input_country = 'serbia'
-            bill.country = input_country
+            bill.currency = "rsd"
+            bill.country = "serbia"
             bill.insert()
+        # test for new unique item's names
+        cur = Bill.connector.cursor()
+        unique_name_query = """
+            SELECT DISTINCT i.name
+            FROM items as i
+            LEFT JOIN items_meta as im ON i.name = im.name
+            WHERE im.name IS NULL;
+        """
+        add_unique_names_query = "INSERT INTO items_meta (name)\n" + unique_name_query
+
+        cur.execute(unique_name_query)
+        data_unique_names = cur.fetchall()
+        if len(data_unique_names) == 0:
+            print('No new unique names of items')
+            cur.close()
+        else:
+            print(f'{len(data_unique_names)} new unique items')
+            cur.execute(add_unique_names_query)
+            #for i in range(len(data_unique_names)):
+                #    if data_unique_names[i] == "":
+                #    continue
+                #print(data_unique_names[i])
+                #tag = input('Tag for this item\n(tag1,tag2,tag3)\n>')
+                #data_unique_names[i] = (*data_unique_names[i], tag,)
+
+            #insert_quary = "INSERT INTO items_meta (name, tag) VALUES (?, ?)"
+            #cur.executemany(insert_quary, data_unique_names)
+            Bill.connector.commit()
+            cur.close()
+
     
     elif args.insert_bill:
         bill = Bill(
