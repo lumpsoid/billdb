@@ -8,3 +8,4 @@ sql-explore.py
 untitled
 notebooks
 build/
+*.db

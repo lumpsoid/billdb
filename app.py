@@ -2,6 +2,7 @@ from flask import Flask, request
 import bill as bm
 
 app = Flask(__name__)
+database_path = './bills.db'
 
 @app.route('/')
 def hello_world():
@@ -25,7 +26,6 @@ def bill():
     country = request.args.get('country')
     tags = request.args.get('tags')
 
-    database_path = '/home/qq/Documents/databaseSQL/bills/bills-for-test.db'
     bm.Bill.connect_to_sqlite(database_path)
      
     bill = bm.Bill(
@@ -46,7 +46,6 @@ def from_qr():
     if not qr_link:
         return 'link attribute is empty'
 
-    database_path = '/home/qq/Documents/databaseSQL/bills/bills-for-test.db'
     bm.Bill.connect_to_sqlite(database_path)
 
     bill = bm.Bill().from_qr(qr_link)
