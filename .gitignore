@@ -9,3 +9,5 @@ untitled
 notebooks
 build/
 *.db
+dist/bill
+bill.spec
