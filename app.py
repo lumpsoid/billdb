@@ -75,5 +75,66 @@ def from_qr():
 
     return 'Transaction commited'
 
+def build_where(var_name, var, counter):
+    statement = []
+    if counter:
+        statement.append(' AND')
+    statement.append(f' {var_name} = {var},')
+    statement = ''.join(statement)
+    return statement
+
+
+@app.route('/db/search')
+def db_search():
+    id = request.args.get('id', None)
+    name = request.args.get('name', None)
+    date = request.args.get('date', None)
+    price = request.args.get('price', None)
+    currency = request.args.get('cur', None)
+    country = request.args.get('cy', None)
+
+    bm.Bill.connect_to_sqlite(database_path)
+    cur = bm.Bill.connector.cursor()
+
+    sql_statement = """
+        SELECT id, name, dates, price, currency, country
+        FROM bills
+        WHERE 
+    """
+    counter = 0
+    if id:
+        sql_statement += build_where('id', id, counter)
+        counter += 1
+    if name:
+        sql_statement += build_where('name', name, counter)
+        counter += 1
+    if date:
+        sql_statement += build_where('dates', date, counter)
+        counter += 1
+    if price:
+        sql_statement += build_where('price', price, counter)
+        counter += 1
+    if currency:
+        sql_statement += build_where('currency', currency, counter)
+        counter += 1
+    if country:
+        sql_statement += build_where('country', country, counter)
+        counter += 1
+    if counter == 0:
+        return 'Provide attributes to the url. Options name, date, price, cur, cy'
+    if sql_statement[-1] == ',':
+        sql_statement = sql_statement[:-1]
+    sql_statement += ';'
+
+    cur.execute(sql_statement)
+    data = cur.fetchall()
+    if len(data) == 0:
+        data = 'Query is empty'
+
+    cur.close()
+    bm.Bill.disconnect_sqlite()
+    return data
+
+
 if __name__ == '__main__':
     app.run(debug=True)

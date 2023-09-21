@@ -66,20 +66,20 @@ class Bill:
     
     @classmethod
     def disconnect_sqlite(cls) -> None:
-        cls.connector.close()
-        cls.connector = None
+        if cls.connector:
+            cls.connector.close()
+            cls.connector = None
 
     def __init__(
             self,
             path_to_db: Union[str, None] = None,
             name: Union[str, None] = None,
             date: Union[str, None] = None,
-            price: Union[int, None] = None,
+            price: Union[float, None] = None,
             currency: Union[str, None] = None,
             country: Union[str, None] = None,
             items: Union[List[Item], None] = None,
-            tags: Union[str, None] = None
-    ):
+            tags: Union[str, None] = None):
 
         if path_to_db and not Bill.connector:
             Bill.connect_to_sqlite(path_to_db)
@@ -100,6 +100,7 @@ class Bill:
         self.tags = tags
         self.link = None
         self.bill_text = None
+        self.dup_list = None
 
 
     def __repr__(self):
@@ -130,7 +131,9 @@ class Bill:
 
         # Parse the HTML content
         dom = etree.HTML(response.content)
-        
+
+        # TODO expose to env variables
+        shop_name_xpath = '//*[@id="shopFullNameLabel"]'
         token_xpath = '/html/head/script[5]'
         invoce_xpath = '//*[@id="invoiceNumberLabel"]'
         price_xpath = '//*[@id="totalAmountLabel"]'
@@ -139,7 +142,7 @@ class Bill:
 
         re_site_junk = re.compile(r'\r\n\s+')        
 
-        self.name = dom.xpath('//*[@id="shopFullNameLabel"]')[0].text
+        self.name = dom.xpath(shop_name_xpath)[0].text
 
         price = dom.xpath(price_xpath)[0].text
         self.price = float(price.replace('.','').replace(',','.'))
@@ -170,6 +173,7 @@ class Bill:
         time.sleep(0.1)
         post_r = requests.post('https://suf.purs.gov.rs//specifications', data=data_post)
         json_data = json.loads(post_r.content.decode('utf-8'))
+
         if json_data.get('Success') is False:
             print("Items was not fetched.", link)
             print('Retring...')
@@ -187,7 +191,7 @@ class Bill:
         return self
     
 
-    def insert(self) -> None:
+    def insert(self, force_dup: bool=False) -> None:
         if self.db and Bill.connector is None:
             if not isinstance(self.db, str):
                 raise ValueError('path_to_db must be str')
@@ -210,6 +214,24 @@ class Bill:
             self.tags = ""
 
         cursor = Bill.connector.cursor()
+
+        # checking duplicates
+        cursor.execute(f'''
+        SELECT id, name, dates, price, currency, bill
+        FROM bills
+        WHERE 
+            dates = '{self.date}'
+            AND price = {self.price}
+            AND currency = '{self.currency}';
+        ''')
+
+        dup_list = cursor.fetchall()
+        if len(dup_list) and not force_dup:
+            print('Maybe duplicates', len(dup_list))
+            self.dup_list = dup_list
+            cursor.close()
+            Bill.disconnect_sqlite()
+            return
 
         cursor.execute(
                 'INSERT INTO bills (id, name, dates, price, currency, country, tag, link, bill) VALUES (?,?,?,?,?,?,?,?,?)',
