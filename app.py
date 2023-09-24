@@ -36,13 +36,14 @@ def bill():
         country=country,
         tags=tags
     )
-    bill.insert()
+    bill.insert(force_dup=False)
     bm.Bill.disconnect_sqlite()
     return bill.__repr__()
 
 @app.route('/qr')
 def from_qr():
     qr_link = request.args.get('link')
+    forcefully = request.args.get('force', False)
     if not qr_link:
         return 'link attribute is empty'
 
@@ -51,7 +52,14 @@ def from_qr():
     bill = bm.Bill().from_qr(qr_link)
     bill.currency = "rsd"
     bill.country = "serbia"
-    bill.insert()
+    bill.insert(force_dup=forcefully)
+
+    if bill.dup_list:
+        list_to_return = ['finded duplicates in db']
+        dup_list = list(map(str, bill.dup_list))
+        list_to_return.extend(dup_list)
+        return list_to_return
+
     # test for new unique item's names
     cur = bm.Bill.connector.cursor()
     unique_name_query = """
@@ -72,69 +80,33 @@ def from_qr():
     bm.Bill.connector.commit()
     cur.close()
     bm.Bill.disconnect_sqlite()
+    response = bill.__repr__()
+    if forcefully:
+        response = 'FORCE WAS USED.\n' + response
 
-    return 'Transaction commited'
+    bill = None
+    return response
 
-def build_where(var_name, var, counter):
-    statement = []
-    if counter:
-        statement.append(' AND')
-    statement.append(f' {var_name} = {var},')
-    statement = ''.join(statement)
-    return statement
-
-
-@app.route('/db/search')
-def db_search():
-    id = request.args.get('id', None)
-    name = request.args.get('name', None)
-    date = request.args.get('date', None)
-    price = request.args.get('price', None)
-    currency = request.args.get('cur', None)
-    country = request.args.get('cy', None)
+@app.route('/db/delete')
+def delete_rows():
+    bill_id = request.args.get('id')
+    confirm = request.args.get('confirm', None)
+    if not bill_id:
+        return 'id attribute is empty'
 
     bm.Bill.connect_to_sqlite(database_path)
     cur = bm.Bill.connector.cursor()
 
-    sql_statement = """
-        SELECT id, name, dates, price, currency, country
-        FROM bills
-        WHERE 
-    """
-    counter = 0
-    if id:
-        sql_statement += build_where('id', id, counter)
-        counter += 1
-    if name:
-        sql_statement += build_where('name', name, counter)
-        counter += 1
-    if date:
-        sql_statement += build_where('dates', date, counter)
-        counter += 1
-    if price:
-        sql_statement += build_where('price', price, counter)
-        counter += 1
-    if currency:
-        sql_statement += build_where('currency', currency, counter)
-        counter += 1
-    if country:
-        sql_statement += build_where('country', country, counter)
-        counter += 1
-    if counter == 0:
-        return 'Provide attributes to the url. Options name, date, price, cur, cy'
-    if sql_statement[-1] == ',':
-        sql_statement = sql_statement[:-1]
-    sql_statement += ';'
+    if confirm is None:
+        return 'confirm your transaction'
+    check = cur.execute(f'DELETE FROM items WHERE id = {bill_id};')
+    print(check)
+    cur.execute(f'DELETE FROM bills WHERE id = {bill_id};')
 
-    cur.execute(sql_statement)
-    data = cur.fetchall()
-    if len(data) == 0:
-        data = 'Query is empty'
-
+    bm.Bill.connector.commit()
     cur.close()
     bm.Bill.disconnect_sqlite()
-    return data
-
+    return f'Bill with id = {bill_id} was deleted'
 
 if __name__ == '__main__':
     app.run(debug=True)
