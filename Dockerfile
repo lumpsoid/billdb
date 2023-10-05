@@ -7,7 +7,7 @@ WORKDIR /app
 COPY bill.py /app/
 COPY app.py /app/
 COPY gunicorn_config.py /app/
-COPY bills.db /app/
+#COPY bills.db /app/
 
 # Install any dependencies
 RUN pip install Flask lxml requests gunicorn
