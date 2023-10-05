@@ -58,16 +58,43 @@ class Item:
 
 class Bill:
     connector = None
+    cursor = None
 
     @classmethod
     def connect_to_sqlite(cls, path_to_db: str) -> None:
         if cls.connector is None:
             cls.connector = sqlite3.connect(path_to_db)
+            cls.cursor = cls.connector.cursor()
     
     @classmethod
-    def disconnect_sqlite(cls) -> None:
-        cls.connector.close()
-        cls.connector = None
+    def close_sqlite(cls) -> None:
+        if cls.connector is not None:
+            cls.connector.commit()
+
+            cls.cursor.close()
+            cls.cursor = None
+
+            cls.connector.close()
+            cls.connector = None
+
+    @classmethod
+    def check_unique_names(cls) -> None:
+        unique_name_query = """
+            SELECT DISTINCT i.name
+            FROM items as i
+            LEFT JOIN items_meta as im ON i.name = im.name
+            WHERE im.name IS NULL;
+        """
+        add_unique_names_query = "INSERT INTO items_meta (name)\n" + unique_name_query
+
+        cls.cursor.execute(unique_name_query)
+        data_unique_names = cls.cursor.fetchall()
+        if len(data_unique_names) == 0:
+            print('No new unique names of items')
+        else:
+            cls.cursor.execute(add_unique_names_query)
+            print(f'{len(data_unique_names)} new unique items')
+
 
     def __init__(
             self,
@@ -76,13 +103,17 @@ class Bill:
             date: Union[str, None] = None,
             price: Union[int, None] = None,
             currency: Union[str, None] = None,
+            exchange_rate: Union[str, None] = None,
             country: Union[str, None] = None,
             items: Union[List[Item], None] = None,
             tags: Union[str, None] = None
     ):
 
-        if path_to_db and not Bill.connector:
+        if path_to_db and Bill.connector is None:
+            if not isinstance(path_to_db, str):
+                raise ValueError('path_to_db must be str')
             Bill.connect_to_sqlite(path_to_db)
+
         if items is None:
             items = []
         
@@ -95,6 +126,7 @@ class Bill:
         self.date = date
         self.price = price
         self.currency = currency
+        self.exchange_rate = exchange_rate
         self.country = country
         self.items = items
         self.tags = tags
@@ -119,10 +151,17 @@ class Bill:
         self.items.append(item)
         return self
 
+    def check_duplicates(self) -> None:
+        Bill.cursor.execute(f'''
+        SELECT id, name, dates, price, currency, bill
+        FROM bills
+        WHERE
+            dates = '{self.date}'
+            AND price = {self.price}
+            AND currency = '{self.currency}';
+        ''')
 
-    def add_connection(self, path_to_db: str) -> None:
-        Bill.connect_to_sqlite(path_to_db)
-
+        self.dup_list = Bill.cursor.fetchall()
     
     def from_qr(self, link) -> object:
         self.link = link
@@ -190,8 +229,6 @@ class Bill:
 
     def insert(self, force_dup) -> None:
         if self.db and Bill.connector is None:
-            if not isinstance(self.db, str):
-                raise ValueError('path_to_db must be str')
             Bill.connect_to_sqlite(self.db)
         if self.db is None and Bill.connector is None:
             raise ValueError('add connection to database')
@@ -203,6 +240,11 @@ class Bill:
             raise ValueError('price must be specified')
         if self.currency is None:
             raise ValueError('currency must be specified')
+        if self.exchange_rate is None:
+            if self.currency == 'rsd':
+                self.exchange_rate = 1
+            else:
+                raise ValueError('exchange rate must be specified')
         if self.country is None:
             raise ValueError('country must be specified')
         if self.tags is None:
@@ -210,59 +252,28 @@ class Bill:
                 raise ValueError('tags must be specified')
             self.tags = ""
 
-        cursor = Bill.connector.cursor()
-
         # checking duplicates
-        cursor.execute(f'''
-        SELECT id, name, dates, price, currency, bill
-        FROM bills
-        WHERE
-            dates = '{self.date}'
-            AND price = {self.price}
-            AND currency = '{self.currency}';
-        ''')
-
-        dup_list = cursor.fetchall()
-        if len(dup_list) and not force_dup:
-            print('Maybe duplicates', len(dup_list))
+        self.check_duplicates()
+        if len(self.dup_list) and not force_dup:
+            print('Maybe duplicates', len(self.dup_list))
             print('Nothing was changed')
-            self.dup_list = dup_list
-            cursor.close()
             return
 
-        cursor.execute(
-                'INSERT INTO bills (id, name, dates, price, currency, country, tag, link, bill) VALUES (?,?,?,?,?,?,?,?,?)',
+        Bill.cursor.execute(
+                'INSERT INTO bills (id, name, dates, price, currency, exchange_rate, country, tag, link, bill) VALUES (?,?,?,?,?,?,?,?,?,?)',
                 (self.timestamp, self.name, self.date, self.price, self.currency, self.country, self.tags, self.link, self.bill_text,)
         )
         if self.items != []:
             insert_query = 'INSERT INTO items (id, name, price, price_one, quantity) VALUES (?,?,?,?,?)'
             for item in self.items:
-                cursor.execute(
+                Bill.cursor.execute(
                         insert_query,
                         (self.timestamp, item.name, item.price, item.price_one, item.quantity,)
                 )
         else:
             print('items are empty.')
 
-        unique_name_query = """
-            SELECT DISTINCT i.name
-            FROM items as i
-            LEFT JOIN items_meta as im ON i.name = im.name
-            WHERE im.name IS NULL;
-        """
-        add_unique_names_query = "INSERT INTO items_meta (name)\n" + unique_name_query
-
-        cursor.execute(unique_name_query)
-        data_unique_names = cursor.fetchall()
-        if len(data_unique_names) == 0:
-            print('No new unique names of items')
-            cursor.close()
-        else:
-            print(f'{len(data_unique_names)} new unique items')
-            cursor.execute(add_unique_names_query)
-        
-        Bill.connector.commit()
-        cursor.close()
+        Bill.close_sqlite()
         print('Transaction commited')
 
 
@@ -282,38 +293,9 @@ def process_actions(args):
             qr_link = qr_link.rstrip('\n')
             bill = Bill().from_qr(qr_link)
             bill.currency = "rsd"
+            bill.exchange_rate = "1"
             bill.country = "serbia"
             bill.insert()
-        # test for new unique item's names
-        cur = Bill.connector.cursor()
-        unique_name_query = """
-            SELECT DISTINCT i.name
-            FROM items as i
-            LEFT JOIN items_meta as im ON i.name = im.name
-            WHERE im.name IS NULL;
-        """
-        add_unique_names_query = "INSERT INTO items_meta (name)\n" + unique_name_query
-
-        cur.execute(unique_name_query)
-        data_unique_names = cur.fetchall()
-        if len(data_unique_names) == 0:
-            print('No new unique names of items')
-            cur.close()
-        else:
-            print(f'{len(data_unique_names)} new unique items')
-            cur.execute(add_unique_names_query)
-            #for i in range(len(data_unique_names)):
-                #    if data_unique_names[i] == "":
-                #    continue
-                #print(data_unique_names[i])
-                #tag = input('Tag for this item\n(tag1,tag2,tag3)\n>')
-                #data_unique_names[i] = (*data_unique_names[i], tag,)
-
-            #insert_quary = "INSERT INTO items_meta (name, tag) VALUES (?, ?)"
-            #cur.executemany(insert_quary, data_unique_names)
-            Bill.connector.commit()
-            cur.close()
-
     
     elif args.insert_bill:
         bill = Bill(
@@ -326,7 +308,7 @@ def process_actions(args):
         )
         bill.insert()
 
-    Bill.disconnect_sqlite()
+    Bill.close_sqlite()
     return
 
 
