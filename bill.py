@@ -93,7 +93,19 @@ class Bill:
             print('No new unique names of items')
         else:
             cls.cursor.execute(add_unique_names_query)
-            print(f'{len(data_unique_names)} new unique items')
+            result = cls.commit_transaction()
+            if result == 1:
+                print(f'{len(data_unique_names)} new unique items')
+            else:
+                print('Something wrong with transaction. Is there a connector?')
+
+    @classmethod
+    def commit_transaction(cls) -> int:
+        output = 0
+        if cls.connector is not None:
+            cls.connector.commit()
+            output = 1
+        return output
 
 
     def __init__(
@@ -273,8 +285,11 @@ class Bill:
         else:
             print('items are empty.')
 
-        Bill.close_sqlite()
-        print('Transaction commited')
+        result = Bill.commit_transaction()
+        if result == 1:
+            print('Transaction commited')
+        else:
+            print('Something wrong with transaction. Is there a connector?')
 
 
 def process_actions(args):
