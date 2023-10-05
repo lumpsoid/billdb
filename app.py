@@ -1,7 +1,14 @@
-from flask import Flask, request
+from flask import Flask, request, send_file
 import bill as bm
 
 app = Flask(__name__)
+
+# Configure Flask logging
+app.logger.setLevel(logging.DEBUG)  # Set the desired logging level
+handler = logging.FileHandler("./flask.log")  # Replace with the desired path inside the container
+handler.setLevel(logging.DEBUG)  # Set the desired logging level for Flask logs
+app.logger.addHandler(handler)
+
 database_path = './bills.db'
 
 @app.route('/')
@@ -23,6 +30,7 @@ def bill():
     date = request.args.get('date')
     price = float(request.args.get('price'))
     currency = request.args.get('currency')
+    exchange_rate = request.args.get('exchange-rate')
     country = request.args.get('country')
     tags = request.args.get('tags')
 
@@ -33,11 +41,12 @@ def bill():
         date=date,
         price=price,
         currency=currency,
+        exchange_rate=exchange_rate,
         country=country,
         tags=tags
     )
     bill.insert(force_dup=False)
-    bm.Bill.disconnect_sqlite()
+    bm.Bill.close_sqlite()
     return bill.__repr__()
 
 @app.route('/qr')
@@ -52,34 +61,30 @@ def from_qr():
     bill = bm.Bill().from_qr(qr_link)
     bill.currency = "rsd"
     bill.country = "serbia"
+    bill.exchange_rate = "1"
     bill.insert(force_dup=forcefully)
 
     if bill.dup_list:
-        list_to_return = ['finded duplicates in db']
-        dup_list = list(map(str, bill.dup_list))
-        list_to_return.extend(dup_list)
+        list_to_return = [f'finded duplicates in db ({len(bill.dup_list)})', 'you can add FORCE attribute']
+        ids = []
+        names = []
+        dates = []
+        prices = []
+        currencies = []
+        bill_texts = []
+        for item in bill.dup_list:
+            i_id, i_name, i_date, i_price, i_currency, i_bill_text = item
+            ids.append(str(i_id))
+            names.append(i_name)
+            dates.append(i_date)
+            prices.append(i_price)
+            currencies.append(i_currency)
+            bill_texts.append(i_bill_text)
+        list_to_return.extend([ids, names, dates, prices, currencies, bill_texts])
         return list_to_return
 
-    # test for new unique item's names
-    cur = bm.Bill.connector.cursor()
-    unique_name_query = """
-        SELECT DISTINCT i.name
-        FROM items as i
-        LEFT JOIN items_meta as im ON i.name = im.name
-        WHERE im.name IS NULL;
-    """
-    add_unique_names_query = "INSERT INTO items_meta (name)\n" + unique_name_query
+    bm.Bill.close_sqlite()
 
-    cur.execute(unique_name_query)
-    data_unique_names = cur.fetchall()
-    if len(data_unique_names) == 0:
-        print('No new unique names of items')
-    else:
-        print(f'{len(data_unique_names)} new unique items')
-        cur.execute(add_unique_names_query)
-    bm.Bill.connector.commit()
-    cur.close()
-    bm.Bill.disconnect_sqlite()
     response = bill.__repr__()
     if forcefully:
         response = 'FORCE WAS USED.\n' + response
@@ -95,18 +100,22 @@ def delete_rows():
         return 'id attribute is empty'
 
     bm.Bill.connect_to_sqlite(database_path)
-    cur = bm.Bill.connector.cursor()
 
     if confirm is None:
         return 'confirm your transaction'
-    check = cur.execute(f'DELETE FROM items WHERE id = {bill_id};')
-    print(check)
-    cur.execute(f'DELETE FROM bills WHERE id = {bill_id};')
+    bm.Bill.cursor.execute(f'DELETE FROM items WHERE id = {bill_id};')
+    bm.Bill.cursor.execute(f'DELETE FROM bills WHERE id = {bill_id};')
 
-    bm.Bill.connector.commit()
-    cur.close()
-    bm.Bill.disconnect_sqlite()
+    bm.Bill.close_sqlite()
     return f'Bill with id = {bill_id} was deleted'
+
+@app.route('/db/save')
+def download_db():
+    bm.Bill.connect_to_sqlite(database_path)
+    bm.Bill.check_unique_names()
+    bm.Bill.close_sqlite()
+
+    return send_file('./bills.db', as_attachment=True)
 
 if __name__ == '__main__':
     app.run(debug=True)
