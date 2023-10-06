@@ -1,6 +1,7 @@
 import logging
 from flask import Flask, request, send_file
 import bill as bm
+import re
 
 app = Flask(__name__)
 
@@ -11,6 +12,43 @@ handler.setLevel(logging.DEBUG)  # Set the desired logging level for Flask logs
 app.logger.addHandler(handler)
 
 database_path = './bills.db'
+
+
+def build_where(var_name, var, counter):
+    statement = []
+    if counter:
+        statement.append(' AND')
+    if var_name == "dates":
+        if re.search(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', var):
+            statement.append(f' {var_name} = "{var}",')
+        elif re.search(r'[0-9]{4}-[0-9]{2}', var):
+            var += '-%'
+            statement.append(f' {var_name} LIKE "{var}",')
+    elif var_name == 'name':
+        statement.append(f' {var_name} LIKE "%{var}%",')
+    elif var_name == 'price':
+        statement.append(f' {var_name} LIKE "{var}%",')
+    else:
+        statement.append(f' {var_name} = "{var}",')
+    statement = ''.join(statement)
+    return statement
+
+def build_html_table(table_header, data):
+        # Generate HTML table dynamically from the list of tuples
+    table_content = '<table border="1">'
+
+    table_content += '<tr>'
+    for name in table_header:
+        table_content += '<th>{}</th>'.format(name)
+    table_content += '</tr>'
+
+    for row in data:
+        table_content += '<tr>'
+        for item in row:
+            table_content += '<td>{}</td>'.format(item)
+        table_content += '</tr>'
+    table_content += '</table>'
+    return table_content
 
 @app.route('/')
 def hello_world():
@@ -92,6 +130,66 @@ def from_qr():
 
     bill = None
     return response
+
+@app.route('/db/search')
+def db_search():
+    id = request.args.get('id', None)
+    name = request.args.get('name', None)
+    date = request.args.get('date', None)
+    price = request.args.get('price', None)
+    currency = request.args.get('cur', None)
+    country = request.args.get('cy', None)
+    item = request.args.get('item', None)
+
+    bm.Bill.connect_to_sqlite(database_path)
+
+    if item:
+        sql_statement = f"""
+            SELECT id, name, price, price_one, quantity
+            FROM items
+            WHERE name LIKE '%{item}%'
+        """
+        table_header = ['id', 'name', 'price', 'price_one', 'quantity']
+    else:
+        sql_statement = """
+            SELECT id, name, dates, price, currency, country
+            FROM bills
+            WHERE 
+        """
+        table_header = ['id', 'name', 'dates', 'price', 'currency', 'country']
+
+        counter = 0
+        if id:
+            sql_statement += build_where('id', id, counter)
+            counter += 1
+        if name:
+            sql_statement += build_where('name', name, counter)
+            counter += 1
+        if date:
+            sql_statement += build_where('dates', date, counter)
+            counter += 1
+        if price:
+            sql_statement += build_where('price', price, counter)
+            counter += 1
+        if currency:
+            sql_statement += build_where('currency', currency, counter)
+            counter += 1
+        if country:
+            sql_statement += build_where('country', country, counter)
+            counter += 1
+        if counter == 0:
+            return 'Provide attributes to the url. Options name, date, price, cur, cy'
+        if sql_statement[-1] == ',':
+            sql_statement = sql_statement[:-1]
+        sql_statement += ';'
+
+    bm.Bill.cursor.execute(sql_statement)
+    data = bm.Bill.cursor.fetchall()
+    if len(data) == 0:
+        data = 'Query is empty'
+    html_table = build_html_table(table_header, data)
+    bm.Bill.close_sqlite()
+    return html_table
 
 @app.route('/db/delete')
 def delete_rows():
