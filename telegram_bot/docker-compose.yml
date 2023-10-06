@@ -1,0 +1,14 @@
+version: '3'
+services:
+  telegram-bot:
+    build:
+      context: ..
+      dockerfile: ./telegram_bot/Dockerfile
+    #ports:
+    #- "5001:5001"
+    volumes:
+      - ../billdb:/app/package/billdb
+      - ~/bills.db:/app/bills.db
+    environment:
+      - BOT_TOKEN=${TOKEN}
+    restart: unless-stopped
