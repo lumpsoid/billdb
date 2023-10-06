@@ -11,3 +11,6 @@ build/
 *.db
 dist/bill
 bill.spec
+access.log
+error.log
+flask.log
