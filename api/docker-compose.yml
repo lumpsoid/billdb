@@ -2,14 +2,14 @@ version: '3'
 services:
   web:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: ./api/Dockerfile
     ports:
       - "5001:5001"
     volumes:
       - ./app.py:/app/app.py
-      - ./flask.log:/app/flask.log
-      - ./bill.py:/app/bill.py
       - ./gunicorn_config.py:/app/gunicorn_config.py
-      - ./bills.db:/app/bills.db
+      - ./flask.log:/app/flask.log
+      - ../billdb:/app/package/billdb
+      - ~/bills.db:/app/bills.db
     restart: unless-stopped
