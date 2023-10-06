@@ -11,7 +11,8 @@ setup(
     ],
     extras_require={
         'api': [  # Optional dependency for the API feature
-            'Flask'
+            'Flask',
+            'gunicorn'
         ],
         'telegram': [  # Optional dependency for the telegram-bot feature
             'python-telegram-bot'

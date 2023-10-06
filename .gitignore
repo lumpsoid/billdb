@@ -8,3 +8,4 @@ sqlbills.egg-info
 telegram_bot/.env
 telegram_bot/set-env.sh
 billdb.egg-info
+api/flask.log
