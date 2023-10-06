@@ -273,7 +273,7 @@ class Bill:
 
         Bill.cursor.execute(
                 'INSERT INTO bills (id, name, dates, price, currency, exchange_rate, country, tag, link, bill) VALUES (?,?,?,?,?,?,?,?,?,?)',
-                (self.timestamp, self.name, self.date, self.price, self.currency, self.country, self.tags, self.link, self.bill_text,)
+                (self.timestamp, self.name, self.date, self.price, self.currency, self.exchange_rate, self.country, self.tags, self.link, self.bill_text,)
         )
         if self.items != []:
             insert_query = 'INSERT INTO items (id, name, price, price_one, quantity) VALUES (?,?,?,?,?)'
