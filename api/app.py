@@ -1,6 +1,10 @@
+try:
+    from flask import Flask, request, send_file
+except ImportError:
+    raise ImportError('flask packed was not found. Try `pip install .[api]`')
+
 import logging
-from flask import Flask, request, send_file
-import bill as bm
+from billdb import Bill
 import re
 
 app = Flask(__name__)
@@ -85,9 +89,9 @@ def bill():
     country = request.args.get('country')
     tags = request.args.get('tags')
 
-    bm.Bill.connect_to_sqlite(database_path)
+    Bill.connect_to_sqlite(database_path)
      
-    bill = bm.Bill(
+    bill = Bill(
         name=name,
         date=date,
         price=price,
@@ -97,7 +101,7 @@ def bill():
         tags=tags
     )
     bill.insert(force_dup=False)
-    bm.Bill.close_sqlite()
+    Bill.close_sqlite()
     return bill.__repr__()
 
 @app.route('/qr')
@@ -107,9 +111,9 @@ def from_qr():
     if not qr_link:
         return 'link attribute is empty'
 
-    bm.Bill.connect_to_sqlite(database_path)
+    Bill.connect_to_sqlite(database_path)
 
-    bill = bm.Bill().from_qr(qr_link)
+    bill = Bill().from_qr(qr_link)
     bill.currency = "rsd"
     bill.country = "serbia"
     bill.exchange_rate = "1"
@@ -121,7 +125,7 @@ def from_qr():
         response += build_html_table(header, bill.dup_list)
         return response
 
-    bm.Bill.close_sqlite()
+    Bill.close_sqlite()
 
     response = []
     if forcefully:
@@ -143,7 +147,7 @@ def db_search():
     country = request.args.get('cy', None)
     item = request.args.get('item', None)
 
-    bm.Bill.connect_to_sqlite(database_path)
+    Bill.connect_to_sqlite(database_path)
 
     if item:
         sql_statement = f"""
@@ -185,12 +189,12 @@ def db_search():
             sql_statement = sql_statement[:-1]
         sql_statement += ';'
 
-    bm.Bill.cursor.execute(sql_statement)
-    data = bm.Bill.cursor.fetchall()
+    Bill.cursor.execute(sql_statement)
+    data = Bill.cursor.fetchall()
     if len(data) == 0:
         data = 'Query is empty'
     html_table = build_html_table(table_header, data)
-    bm.Bill.close_sqlite()
+    Bill.close_sqlite()
     return html_table
 
 @app.route('/db/delete')
@@ -200,21 +204,21 @@ def delete_rows():
     if not bill_id:
         return 'id attribute is empty'
 
-    bm.Bill.connect_to_sqlite(database_path)
+    Bill.connect_to_sqlite(database_path)
 
     if confirm is None:
         return 'confirm your transaction'
-    bm.Bill.cursor.execute(f'DELETE FROM items WHERE id = {bill_id};')
-    bm.Bill.cursor.execute(f'DELETE FROM bills WHERE id = {bill_id};')
+    Bill.cursor.execute(f'DELETE FROM items WHERE id = {bill_id};')
+    Bill.cursor.execute(f'DELETE FROM bills WHERE id = {bill_id};')
 
-    bm.Bill.close_sqlite()
+    Bill.close_sqlite()
     return f'Bill with id = {bill_id} was deleted'
 
 @app.route('/db/save')
 def download_db():
-    bm.Bill.connect_to_sqlite(database_path)
-    bm.Bill.check_unique_names()
-    bm.Bill.close_sqlite()
+    Bill.connect_to_sqlite(database_path)
+    Bill.check_unique_names()
+    Bill.close_sqlite()
 
     return send_file('./bills.db', as_attachment=True)
 

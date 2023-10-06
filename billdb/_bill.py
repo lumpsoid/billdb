@@ -1,5 +1,3 @@
-import argparse
-import os
 import re
 import sqlite3
 import time
@@ -9,56 +7,14 @@ import json
 import requests
 from lxml import etree
 
-def is_valid_time(time_string):
-    '''
-    Check if string is in right format YYYY-MM-DD
-    '''
-    try:
-        time.strptime(time_string, '%Y-%m-%d')
-        return True
-    except ValueError:
-        return False
-
-
-class Item:
-    def __init__(
-            self,
-            photo_path: Union[str, None] = None,
-            name: Union[str, None] = None,
-            price: Union[float, None] = None,
-            price_one: Union[int, None] = None,
-            quantity: Union[int, None] = None
-    ):
-        self.photo_path = photo_path
-        self.name = name
-        self.price = price
-        self.price_one = price_one
-        self.quantity = quantity
-
-
-    def __repr__(self):
-        # params = vars(self)
-        params = f'name: {self.name}\nprice: {self.price}\nprice_one: {self.price_one}\nquantity: {self.quantity}\nphoto_path: {self.photo_path}'
-        return params
-
-
-    def fill_defaults(self) -> object:
-        if self.photo_path is None:
-            self.photo_path = ''
-        if self.name is None:
-            self.name = ''
-        if self.price is None:
-            self.price = 0
-        if self.price_one is None:
-            self.price_one = 0
-        if self.quantity is None:
-            self.quantity = 1
-        return self
-
+from ._item import Item
+from .helpers import is_valid_time
+from ._utils.logging import get_logger
 
 class Bill:
     connector = None
     cursor = None
+    LOGGER = get_logger(__name__)
 
     @classmethod
     def connect_to_sqlite(cls, path_to_db: str) -> None:
@@ -90,14 +46,14 @@ class Bill:
         cls.cursor.execute(unique_name_query)
         data_unique_names = cls.cursor.fetchall()
         if len(data_unique_names) == 0:
-            print('No new unique names of items')
+            Bill.LOGGER.info('No new unique names of items')
         else:
             cls.cursor.execute(add_unique_names_query)
             result = cls.commit_transaction()
             if result == 1:
-                print(f'{len(data_unique_names)} new unique items')
+                Bill.LOGGER.info(f'{len(data_unique_names)} new unique items')
             else:
-                print('Something wrong with transaction. Is there a connector?')
+                Bill.LOGGER.warning('Something wrong with transaction. Is there a connector?')
 
     @classmethod
     def commit_transaction(cls) -> int:
@@ -178,7 +134,7 @@ class Bill:
     def from_qr(self, link) -> object:
         self.link = link
         response = requests.get(link, timeout=60)
-        print('status code:', response.status_code)
+        Bill.LOGGER.info('status code:', response.status_code)
 
         # Parse the HTML content
         dom = etree.HTML(response.content)
@@ -223,8 +179,8 @@ class Bill:
         post_r = requests.post('https://suf.purs.gov.rs//specifications', data=data_post)
         json_data = json.loads(post_r.content.decode('utf-8'))
         if json_data.get('Success') is False:
-            print("Items was not fetched.", link)
-            print('Retring...')
+            Bill.LOGGER.info("Items was not fetched.", link)
+            Bill.LOGGER.info('Retring...')
             post_r = requests.post('https://suf.purs.gov.rs//specifications', data=data_post)
             json_data = json.loads(post_r.content.decode('utf-8'))
 
@@ -240,6 +196,8 @@ class Bill:
     
 
     def insert(self, force_dup) -> None:
+        # explicite check of all importatnt parts
+        # make sure that all in its final form
         if self.db and Bill.connector is None:
             Bill.connect_to_sqlite(self.db)
         if self.db is None and Bill.connector is None:
@@ -267,8 +225,8 @@ class Bill:
         # checking duplicates
         self.check_duplicates()
         if len(self.dup_list) and not force_dup:
-            print('Maybe duplicates', len(self.dup_list))
-            print('Nothing was changed')
+            Bill.LOGGER.info('Maybe duplicates', len(self.dup_list))
+            Bill.LOGGER.info('Nothing was changed')
             return
 
         Bill.cursor.execute(
@@ -283,112 +241,10 @@ class Bill:
                         (self.timestamp, item.name, item.price, item.price_one, item.quantity,)
                 )
         else:
-            print('items are empty.')
+            Bill.LOGGER.info('items are empty.')
 
         result = Bill.commit_transaction()
         if result == 1:
-            print('Transaction commited')
+            Bill.LOGGER.info('Transaction commited')
         else:
-            print('Something wrong with transaction. Is there a connector?')
-
-
-def process_actions(args):
-    expanded_path = os.path.expanduser(args.database)
-    Bill.connect_to_sqlite(expanded_path)
-    
-    if args.from_qr:
-        try:
-            with open(args.from_qr, 'r', encoding='utf-8') as f:
-                qr_txt = f.readlines()
-        except IOError:
-            raise FileExistsError("Error reading qr file.")
-
-        qr_txt = list(set(qr_txt))
-        for qr_link in qr_txt:
-            qr_link = qr_link.rstrip('\n')
-            bill = Bill().from_qr(qr_link)
-            bill.currency = "rsd"
-            bill.exchange_rate = "1"
-            bill.country = "serbia"
-            bill.insert()
-    
-    elif args.insert_bill:
-        bill = Bill(
-            name=args.name,
-            date=args.date,
-            price=args.price,
-            currency=args.currency,
-            country=args.country,
-            tags=args.tags
-        )
-        bill.insert()
-
-    Bill.close_sqlite()
-    return
-
-
-def args_init():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-d", "--database",
-        help="path to the database file",
-        metavar='PATH',
-        required=True,
-    )
-    parser.add_argument(
-        '-q', "--from-qr", 
-        help="Read txt file with URL form qr and parse it to the database.",
-        metavar='PATH',
-        default=None,
-        required=False
-    )
-    parser.add_argument(
-        '-i', "--insert-bill", 
-        help="Insert bill from terminal.",
-        action='store_true',
-        default=None,
-        required=False
-    )
-    parser.add_argument(
-        '--name', 
-        help="Name of the bill.",
-        default=None,
-        required=False
-    )
-    parser.add_argument(
-        '--date', 
-        help="Date of the bill in format YYYY-MM-DD.",
-        default=None,
-        required=False
-    )
-    parser.add_argument(
-        '--price', 
-        help="Overall price of the bill.",
-        default=None,
-        type=float,
-        required=False
-    )
-    parser.add_argument(
-        '--currency', 
-        help="Currency of the bill.",
-        default=None,
-        required=False
-    )
-    parser.add_argument(
-        '--country', 
-        help="country where bill was payed.",
-        default=None,
-        required=False
-    )
-    parser.add_argument(
-        '--tags', 
-        help="tags for the bill. In 'tag1,tag2,tag3' manner.",
-        default=None,
-        required=False
-    )
-    args = parser.parse_args()
-    return args
-
-if __name__ == "__main__":
-    args = args_init()
-    process_actions(args)
+            Bill.LOGGER.warning('Something wrong with transaction. Is there a connector?')
