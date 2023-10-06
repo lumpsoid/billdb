@@ -1,15 +1,17 @@
 import re
+import logging
 import sqlite3
 import time
 from typing import List, Union
-import json
-
-import requests
-from lxml import etree
 
 from ._item import Item
 from .helpers import is_valid_time
 from ._utils.logging import get_logger
+from ._parsers import _serbia
+
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
 
 class Bill:
     connector = None
@@ -132,68 +134,12 @@ class Bill:
         self.dup_list = Bill.cursor.fetchall()
     
     def from_qr(self, link) -> object:
-        self.link = link
-        response = requests.get(link, timeout=60)
-        Bill.LOGGER.info('status code:', response.status_code)
+        if re.match(r'https://suf.purs.gov.rs', link):
+            Bill.LOGGER.debug('using serbian parser.')
+            # name, date, price, currency, country, bill_text, items
+            self.name, self.date, self.price, self.currency, self.country, self.bill_text, self.items = _serbia.get_bill_info(link)
 
-        # Parse the HTML content
-        dom = etree.HTML(response.content)
-        
-        token_xpath = '/html/head/script[5]'
-        invoce_xpath = '//*[@id="invoiceNumberLabel"]'
-        price_xpath = '//*[@id="totalAmountLabel"]'
-        buy_date_xpath = '//*[@id="sdcDateTimeLabel"]'
-        bill_xpath = '//*[@id="collapse3"]/div/pre'
-
-        re_site_junk = re.compile(r'\r\n\s+')        
-
-        self.name = dom.xpath('//*[@id="shopFullNameLabel"]')[0].text
-
-        price = dom.xpath(price_xpath)[0].text
-        self.price = float(price.replace('.','').replace(',','.'))
-
-        date_format = "%d.%m.%Y." # format of the date string
-        buy_date = dom.xpath(buy_date_xpath)[0].text
-        buy_date = re_site_junk.sub('', buy_date)
-        buy_date = buy_date.split(' ')[0]
-        buy_date = time.strptime(buy_date, date_format)
-        self.date = time.strftime("%Y-%m-%d", buy_date)
-
-        bill = dom.xpath(bill_xpath)
-        if len(bill) == 0:
-            self.bill_text = "check"
-        else:
-            self.bill_text = bill[0].text
-        # bill_img = dom.xpath('//*[@id="collapse1"]/div/pre/img')[0].attrib.get('src')
-        self.currency = 'rsd'
-        self.country = 'serbia'
-        # items fetching
-        token = re.search(r"viewModel\.Token\('(.*)'\);", dom.xpath(token_xpath)[0].text).group(1)
-        invoce_num = dom.xpath(invoce_xpath)[0].text.strip(' \r\n')
-        data_post = {
-            "invoiceNumber": invoce_num,
-            "token": token
-        }
-        post_r = requests.post('https://suf.purs.gov.rs//specifications', data=data_post)
-        time.sleep(0.1)
-        post_r = requests.post('https://suf.purs.gov.rs//specifications', data=data_post)
-        json_data = json.loads(post_r.content.decode('utf-8'))
-        if json_data.get('Success') is False:
-            Bill.LOGGER.info("Items was not fetched.", link)
-            Bill.LOGGER.info('Retring...')
-            post_r = requests.post('https://suf.purs.gov.rs//specifications', data=data_post)
-            json_data = json.loads(post_r.content.decode('utf-8'))
-
-        items = json_data.get('Items')
-        for item in items:
-            self.add_item(
-                name=item.get('Name'),
-                price=item.get('Total'),
-                price_one=item.get('UnitPrice'),
-                quantity=item.get('Quantity')
-            )
         return self
-    
 
     def insert(self, force_dup) -> None:
         # explicite check of all importatnt parts
