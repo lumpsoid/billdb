@@ -50,6 +50,18 @@ def build_html_table(table_header, data):
     table_content += '</table>'
     return table_content
 
+def build_html_list(data):
+    # Generate HTML list dynamically from the Python list
+    list_content = '<ul>'
+    for item in data:
+        if re.match(r'http', item):
+            list_content += '<li><a href="{}">Link</a></li>'.format(item)
+            continue
+        list_content += '<li>{}</li>'.format(item)
+    # Add a list item with an anchor element at the end of the list
+    list_content += '</ul>'
+    return list_content
+
 @app.route('/')
 def hello_world():
     return 'Working fine!'
@@ -103,30 +115,20 @@ def from_qr():
     bill.exchange_rate = "1"
     bill.insert(force_dup=forcefully)
 
-    if bill.dup_list:
-        list_to_return = [f'finded duplicates in db ({len(bill.dup_list)})', 'you can add FORCE attribute']
-        ids = []
-        names = []
-        dates = []
-        prices = []
-        currencies = []
-        bill_texts = []
-        for item in bill.dup_list:
-            i_id, i_name, i_date, i_price, i_currency, i_bill_text = item
-            ids.append(str(i_id))
-            names.append(i_name)
-            dates.append(i_date)
-            prices.append(i_price)
-            currencies.append(i_currency)
-            bill_texts.append(i_bill_text)
-        list_to_return.extend([ids, names, dates, prices, currencies, bill_texts])
-        return list_to_return
+    if bill.dup_list and not forcefully:
+        response = '<p>finded duplicates in db ({})<br>you can add <b>FORCE</b> attribute</p>'.format(len(bill.dup_list))
+        header = ['id', 'name', 'date', 'price', 'currency', 'bill_text']
+        response += build_html_table(header, bill.dup_list)
+        return response
 
     bm.Bill.close_sqlite()
 
-    response = bill.__repr__()
+    response = []
     if forcefully:
-        response = 'FORCE WAS USED.\n' + response
+        response.append('FORCE WAS USED')
+    response.extend([str(bill.timestamp), bill.name, bill.date, str(bill.price), bill.currency, bill.exchange_rate, bill.country, str(len(bill.items)), bill.tags, bill.link])
+    print(response)
+    response = build_html_list(response)
 
     bill = None
     return response
