@@ -4,8 +4,10 @@ except ImportError:
     raise ImportError('flask packed was not found. Try `pip install .[api]`')
 
 import logging
-from billdb import Bill
 import re
+
+from billdb import Bill
+from billdb import build_html_table, build_html_list
 
 app = Flask(__name__)
 
@@ -36,35 +38,6 @@ def build_where(var_name, var, counter):
         statement.append(f' {var_name} = "{var}",')
     statement = ''.join(statement)
     return statement
-
-def build_html_table(table_header, data):
-        # Generate HTML table dynamically from the list of tuples
-    table_content = '<table border="1">'
-
-    table_content += '<tr>'
-    for name in table_header:
-        table_content += '<th>{}</th>'.format(name)
-    table_content += '</tr>'
-
-    for row in data:
-        table_content += '<tr>'
-        for item in row:
-            table_content += '<td>{}</td>'.format(item)
-        table_content += '</tr>'
-    table_content += '</table>'
-    return table_content
-
-def build_html_list(data):
-    # Generate HTML list dynamically from the Python list
-    list_content = '<ul>'
-    for item in data:
-        if re.match(r'http', item):
-            list_content += '<li><a href="{}">Link</a></li>'.format(item)
-            continue
-        list_content += '<li>{}</li>'.format(item)
-    # Add a list item with an anchor element at the end of the list
-    list_content += '</ul>'
-    return list_content
 
 @app.route('/')
 def hello_world():
@@ -130,8 +103,7 @@ def from_qr():
     response = []
     if forcefully:
         response.append('FORCE WAS USED')
-    response.extend([str(bill.timestamp), bill.name, bill.date, str(bill.price), bill.currency, bill.exchange_rate, bill.country, str(len(bill.items)), bill.tags, bill.link])
-    print(response)
+    response.extend([str(bill.timestamp), bill.name, bill.date, str(bill.price), bill.currency, bill.exchange_rate, bill.country, str(len(bill.items)), bill.link])
     response = build_html_list(response)
 
     bill = None

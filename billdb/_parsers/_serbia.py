@@ -7,6 +7,7 @@ from lxml import etree
 from .._item import Item
 from .._utils.logging import get_logger
 
+
 def get_bill_info(link):
     '''
     Parsing site with bill info.
@@ -15,10 +16,10 @@ def get_bill_info(link):
 
     Return: name, date, price, currency, country, bill_text, items
     '''
-    LOGGER = get_logger('PARSER_SERBIA')
+    LOGGER = get_logger(__name__)
 
     response = requests.get(link, timeout=60)
-    LOGGER.info('status code:', response.status_code)
+    LOGGER.info('status code: {}'.format(response.status_code))
 
     # metaparameters
     re_site_junk = re.compile(r'\r\n\s+')        
@@ -51,28 +52,25 @@ def get_bill_info(link):
         "token": token
     }
     post_r = requests.post('https://suf.purs.gov.rs//specifications', data=data_post)
-    sleep(0.1)
+    sleep(0.2)
     post_r = requests.post('https://suf.purs.gov.rs//specifications', data=data_post)
     json_data = json.loads(post_r.content.decode('utf-8'))
     if json_data.get('Success') == False:
-        LOGGER.info("Items was not fetched.", link)
+        LOGGER.info("Items was not fetched. {}".format(link))
         LOGGER.info('Retring...')
+        sleep(0.1)
         post_r = requests.post('https://suf.purs.gov.rs//specifications', data=data_post)
         json_data = json.loads(post_r.content.decode('utf-8'))
-
 
     items_json = json_data.get('Items')
     items = []
     for item in items_json:
-        items.append(
-            Item(
-                name=item.get('Name'),
-                price=item.get('Total'),
-                price_one=item.get('UnitPrice'),
-                quantity=item.get('Quantity'),
-                photo_path=None
-            )
-        )
+        items.append(Item(
+            name=item.get('Name'),
+            price=item.get('Total'),
+            price_one=item.get('UnitPrice'),
+            quantity=item.get('Quantity'),
+            photo_path=None))
     price = float(price.replace('.','').replace(',','.'))
     name = dom.xpath(name_xpath)[0].text
     currency = 'rsd'

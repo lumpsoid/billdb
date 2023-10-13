@@ -15,7 +15,7 @@ setup(
             'gunicorn'
         ],
         'telegram': [  # Optional dependency for the telegram-bot feature
-            'python-telegram-bot'
+            'python-telegram-bot',
         ],
     }
 )

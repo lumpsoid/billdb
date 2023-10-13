@@ -121,6 +121,29 @@ class Bill:
         self.items.append(item)
         return self
 
+    def update_info(self, name=None, date=None, price=None, currency=None, exchange_rate=None, country=None, bill_text=None, items=None, tags=None):
+        '''Updating info about the bill if provided.'''
+        if name:
+            self.name = name
+        if date:
+            self.date = date
+        if price:
+            self.price = price
+        if currency:
+            self.currency = currency
+        if country:
+            self.country = country
+        if bill_text:
+            self.bill_text = bill_text
+        if items:
+            self.items = items
+        if tags:
+            self.tags = tags
+        if exchange_rate:
+            self.exchange_rate = exchange_rate
+        return
+
+
     def check_duplicates(self) -> None:
         Bill.cursor.execute(f'''
         SELECT id, name, dates, price, currency, bill
@@ -138,6 +161,8 @@ class Bill:
             Bill.LOGGER.debug('using serbian parser.')
             # name, date, price, currency, country, bill_text, items
             self.name, self.date, self.price, self.currency, self.country, self.bill_text, self.items = _serbia.get_bill_info(link)
+            self.exchange_rate = '1'
+            self.link = link
 
         return self
 
@@ -171,8 +196,7 @@ class Bill:
         # checking duplicates
         self.check_duplicates()
         if len(self.dup_list) and not force_dup:
-            Bill.LOGGER.info('Maybe duplicates', len(self.dup_list))
-            Bill.LOGGER.info('Nothing was changed')
+            Bill.LOGGER.info(f'Maybe duplicates ({len(self.dup_list)}). Nothing was changed.')
             return
 
         Bill.cursor.execute(
