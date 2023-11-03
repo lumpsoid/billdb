@@ -9,7 +9,6 @@ services:
     volumes:
       - ./app.py:/app/app.py
       - ./gunicorn_config.py:/app/gunicorn_config.py
-      - ./flask.log:/app/flask.log
       - ../billdb:/app/package/billdb
       - ~/bills.db:/app/bills.db
     restart: unless-stopped

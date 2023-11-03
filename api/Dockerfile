@@ -12,6 +12,8 @@ COPY ./setup.py /app/package/setup.py
 # Install any dependencies
 RUN pip install ./package[api]
 
+RUN touch ./flask.log
+
 # Expose a port if your Flask app listens on one gunicorn_config.py
 EXPOSE 5001
 
