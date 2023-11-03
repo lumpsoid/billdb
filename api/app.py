@@ -56,7 +56,7 @@ def greet():
 def bill():
     name = request.args.get('name')
     date = request.args.get('date')
-    price = float(request.args.get('price'))
+    price = request.args.get('price')
     currency = request.args.get('currency')
     exchange_rate = request.args.get('exchange-rate')
     country = request.args.get('country')
@@ -67,7 +67,7 @@ def bill():
     bill = Bill(
         name=name,
         date=date,
-        price=price,
+        price=float(price),
         currency=currency,
         exchange_rate=exchange_rate,
         country=country,
@@ -193,6 +193,22 @@ def download_db():
     Bill.close_sqlite()
 
     return send_file('./bills.db', as_attachment=True)
+
+@app.route('/db/upload', methods=['GET'])
+def upload_form_render():
+    with open('./upload.html') as f:
+        upload_html = f.read()
+    return upload_html
+
+@app.route('/db/upload', methods=['POST'])
+def upload_db():
+    uploaded_file = request.files['file']
+    if uploaded_file.filename != '':
+        # Save the uploaded file to a specific folder
+        uploaded_file.save('./bills.db')
+        return 'File successfully uploaded.'
+    else:
+        return 'No file selected for uploading.'
 
 if __name__ == '__main__':
     app.run(debug=True)
