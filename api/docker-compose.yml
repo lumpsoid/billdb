@@ -10,5 +10,5 @@ services:
       - ./app.py:/app/app.py
       - ./gunicorn_config.py:/app/gunicorn_config.py
       - ../billdb:/app/package/billdb
-      - ~/bills.db:/app/bills.db
+      - ~/bill-data/bills.db:/app/bills.db
     restart: unless-stopped
