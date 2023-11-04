@@ -7,7 +7,7 @@ WORKDIR /app
 # server
 COPY ./api/app.py /app/
 COPY ./api/gunicorn_config.py /app/
-COPY ./api/upload.html /app/
+COPY ./api/htmls /app/htmls
 # package
 COPY ./billdb /app/package/billdb
 COPY ./setup.py /app/package/setup.py
