@@ -1,13 +1,13 @@
 try:
-    from flask import Flask, request, send_file
+    from flask import Flask, request, send_file, redirect
 except ImportError:
     raise ImportError('flask packed was not found. Try `pip install .[api]`')
 
 import logging
 import re
+import os
 
-from billdb import Bill
-from billdb import build_html_table, build_html_list
+from billdb import Bill, db_template, build_html_table, build_html_list
 
 app = Flask(__name__)
 
@@ -18,6 +18,17 @@ handler.setLevel(logging.DEBUG)  # Set the desired logging level for Flask logs
 app.logger.addHandler(handler)
 
 database_path = './bills.db'
+
+def check_db_exist():
+    if not os.path.exists(database_path):
+        redirect('/db/create')
+    return
+
+def create_new_db():
+    Bill.connect_to_sqlite(database_path)
+    Bill.cursor.executescript(db_template)
+    Bill.close_sqlite()
+    return
 
 
 def build_where(var_name, var, counter):
@@ -52,6 +63,41 @@ def greet():
     else:
         return 'Hello, Guest!'
 
+@app.route('/db/create', methods=['GET', 'POST'])
+def create_db():
+    if request.method == 'GET':
+        if not os.path.exists(database_path):
+            create_new_db()
+            return 'DB was successfully created for the first time'
+        with open('./htmls/create-confirmation.html') as f:
+            confirm_create = f.read()
+        return confirm_create
+    elif request.method == 'POST':
+        last_id = request.form.get('lastBillId')
+        Bill.connect_to_sqlite(database_path)
+        #getting last id
+        Bill.cursor.execute('SELECT MAX(id) AS last_transaction_number FROM bills;')
+        fetch_data = Bill.cursor.fetchone()
+        # None if there is no rows in db
+        if fetch_data[0] is not None and fetch_data[0][0] != last_id:
+            Bill.close_sqlite()
+            return f'last id does not match the database ({fetch_data=}, {last_id=})'
+        # close connection with previous db which maybe would deleted
+        Bill.close_sqlite()
+        if os.path.exists(database_path):
+            os.remove(database_path)
+
+        create_new_db()
+        return 'DB was successfully created'
+
+
+@app.route('/bill/form')
+def bill_form_render():
+    check_db_exist()
+    with open('./htmls/custom-bill-form.html') as f:
+        bill_form = f.read()
+    return bill_form
+
 @app.route('/bill')
 def bill():
     name = request.args.get('name')
@@ -62,6 +108,10 @@ def bill():
     country = request.args.get('country')
     tags = request.args.get('tags')
 
+    if None in (name, date, price, currency, exchange_rate, country, tags,):
+        return 'You need to provide: name, date, price, currency, exchange-rate, country, tags'
+
+    check_db_exist()
     Bill.connect_to_sqlite(database_path)
      
     bill = Bill(
@@ -79,6 +129,7 @@ def bill():
 
 @app.route('/qr')
 def from_qr():
+    check_db_exist()
     qr_link = request.args.get('link')
     forcefully = request.args.get('force', False)
     if not qr_link:
@@ -196,7 +247,7 @@ def download_db():
 
 @app.route('/db/upload', methods=['GET'])
 def upload_form_render():
-    with open('./upload.html') as f:
+    with open('./htmls/upload.html') as f:
         upload_html = f.read()
     return upload_html
 

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirmation Page</title>
+    <style>
+        .red-button {
+            color: white;
+            background-color: red;
+            border: none;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin-top: 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Create new bills db</h1>
+    <!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Last Bill ID Form</title>
+</head>
+
+<body>
+    <!-- Form for entering the Last Bill ID -->
+    <form id="billForm" action="/db/create" method="post">
+        <label for="lastBillId">Last Bill ID as confirmation:</label>
+        <input type="number" id="lastBillId" name="lastBillId" required><br>
+        <button class="red-button" type="button" onclick="showConfirmation()">CREATE</button>
+    </form>
+
+    <script>
+        function showConfirmation() {
+            var confirmation = confirm("Are you sure you want to proceed with NEW db creation?\nthis will ERASE previous data if exists.");
+            if (confirmation) {
+                document.getElementById('billForm').submit();
+            }
+        }
+    </script>
+
+    <br>
+    <br>
+    <br>
+    <br>
+    <button onclick="goBack()">Go Back</button>
+
+    <script>
+        function goBack() {
+            // Use window.history to navigate back
+            window.history.back();
+        }
+    </script>
+
+</body>
+
+</html>
