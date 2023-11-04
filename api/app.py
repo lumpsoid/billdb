@@ -79,7 +79,7 @@ def create_db():
         Bill.cursor.execute('SELECT MAX(id) AS last_transaction_number FROM bills;')
         fetch_data = Bill.cursor.fetchone()
         # None if there is no rows in db
-        if fetch_data[0] is not None and fetch_data[0][0] != last_id:
+        if fetch_data[0] is not None and fetch_data[0] != last_id:
             Bill.close_sqlite()
             return f'last id does not match the database ({fetch_data=}, {last_id=})'
         # close connection with previous db which maybe would deleted
