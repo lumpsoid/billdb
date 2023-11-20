@@ -19,11 +19,6 @@ app.logger.addHandler(handler)
 
 database_path = './bills.db'
 
-def check_db_exist():
-    if not os.path.exists(database_path):
-        redirect('/db/create')
-    return
-
 def create_new_db():
     Bill.connect_to_sqlite(database_path)
     Bill.cursor.executescript(db_template)
@@ -57,7 +52,6 @@ def hello_world():
 @app.route('/greet')
 def greet():
     name = request.args.get('name')
-    print('name', name)
     if name:
         return f'Hello, {name}!'
     else:
@@ -93,7 +87,6 @@ def create_db():
 
 @app.route('/bill/form')
 def bill_form_render():
-    check_db_exist()
     with open('./htmls/custom-bill-form.html') as f:
         bill_form = f.read()
     return bill_form
@@ -111,7 +104,6 @@ def bill():
     if None in (name, date, price, currency, exchange_rate, country, tags,):
         return 'You need to provide: name, date, price, currency, exchange-rate, country, tags'
 
-    check_db_exist()
     Bill.connect_to_sqlite(database_path)
      
     bill = Bill(
@@ -129,27 +121,29 @@ def bill():
 
 @app.route('/qr')
 def from_qr():
-    check_db_exist()
     qr_link = request.args.get('link')
     forcefully = request.args.get('force', False)
     if not qr_link:
-        return 'link attribute is empty'
+        with open('./htmls/paste-qr.html') as f:
+            clipboard_html = f.read()
+        return clipboard_html
 
     Bill.connect_to_sqlite(database_path)
 
     bill = Bill().from_qr(qr_link)
-    bill.currency = "rsd"
-    bill.country = "serbia"
-    bill.exchange_rate = "1"
+    bill.update_info(
+        currency = "rsd",
+        country = "serbia",
+        exchange_rate = "1",
+    )
     bill.insert(force_dup=forcefully)
+    Bill.close_sqlite()
 
     if bill.dup_list and not forcefully:
         response = '<p>finded duplicates in db ({})<br>you can add <b>FORCE</b> attribute</p>'.format(len(bill.dup_list))
         header = ['id', 'name', 'date', 'price', 'currency', 'bill_text']
         response += build_html_table(header, bill.dup_list)
         return response
-
-    Bill.close_sqlite()
 
     response = []
     if forcefully:

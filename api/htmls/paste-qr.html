@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clipboard Example</title>
+    <style>
+        body {
+            background-color: #e6ffe6; /* Slightly green background */
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        label {
+            margin-bottom: 10px;
+        }
+
+        #linkField {
+            width: 300px;
+            padding: 5px;
+            margin-bottom: 10px;
+        }
+
+        #buttonsRow {
+            display: flex;
+            justify-content: space-between;
+            width: 300px;
+        }
+
+        button {
+            padding: 15px;
+            font-size: 16px; /* Increased font size */
+            background-color: #4CAF50; /* Green background */
+            color: white;
+            border: 2px solid #4CAF50; /* Bold green border */
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: white;
+            color: #4CAF50; /* Green text on hover */
+        }
+    </style>
+</head>
+<body>
+    <label for="linkField">Enter Link:</label>
+    <input type="text" id="linkField" placeholder="Enter URL">
+
+    <div id="buttonsRow">
+        <button onclick="postData()">Post</button>
+        <button onclick="pasteFromClipboard()">Paste</button>
+    </div>
+
+    <script>
+        function postData() {
+            const linkField = document.getElementById('linkField');
+            const linkValue = linkField.value;
+
+            // Construct the URL with the link parameter
+            const url = `/qr?link=${encodeURIComponent(linkValue)}`;
+
+            window.location.href = url;
+        }
+
+        async function pasteFromClipboard() {
+
+            const clipText = await navigator.clipboard.readText();
+
+            const linkField = document.getElementById('linkField');
+            linkField.value = clipText;
+
+            // Construct the URL with the link parameter
+            const url = `/qr?link=${encodeURIComponent(clipText)}`;
+
+            window.location.href = url;
+        }
+    </script>
+</body>
+</html>
+
