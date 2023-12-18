@@ -1,0 +1,16 @@
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "billdb"
+version = "0.0.3"
+description = ""
+authors = ["lumpsoid"]
+readme = "README.md"
+packages = [{include = "billdb"}]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+requests = "^2.31.0"
+lxml = "^4.9.3"
