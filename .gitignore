@@ -8,3 +8,5 @@ billdb/__pycache__/_bill.cpython-312.pyc
 billdb/__pycache__/_item.cpython-312.pyc
 billdb/__pycache__/_template.cpython-312.pyc
 billdb/__pycache__/helpers.cpython-312.pyc
+tests/__pycache__/test_bill.cpython-312-pytest-7.4.4.pyc
+tests/__pycache__/test_parser.cpython-312-pytest-7.4.4.pyc

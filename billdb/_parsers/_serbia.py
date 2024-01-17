@@ -7,6 +7,16 @@ from lxml import etree
 from .._item import Item
 from .._utils.logging import get_logger
 
+xpath_data = {
+    "token_xpath": "/html/head/script[5]",
+    "invoce_xpath": '//*[@id="invoiceNumberLabel"]',
+    "price_xpath": '//*[@id="totalAmountLabel"]',
+    "buy_date_xpath": '//*[@id="sdcDateTimeLabel"]',
+    "bill_xpath": '//*[@id="collapse3"]/div/pre',
+    "name_xpath": '//*[@id="shopFullNameLabel"]',
+    "token_search": r"viewModel\.Token\('(.*)'\);",
+}
+
 
 def get_bill_info(link: str) -> tuple:
     """
@@ -25,20 +35,19 @@ def get_bill_info(link: str) -> tuple:
     name_xpath = '//*[@id="shopFullNameLabel"]'
     token_search = r"viewModel\.Token\('(.*)'\);"
 
-    LOGGER = get_logger(__name__)
+    dom = get_dom(link)
 
-    response = requests.get(link, timeout=60)
-    LOGGER.info("status code: {}".format(response.status_code))
+    name = get_bill_name(dom, xpath_data["name_xpath"])
+    bill_text = get_bill_text(dom, xpath_data["bill_xpath"])
+    date = get_bill_buy_date(dom, xpath_data["buy_date_xpath"], "%d.%m.%Y.", "%Y-%m-%d")
+    items = get_bill_items(
+        dom,
+        xpath_data["token_xpath"],
+        xpath_data["token_search"],
+        xpath_data["invoce_xpath"],
+    )
+    price = get_bill_price(dom, xpath_data["price_xpath"])
 
-    # Parse the HTML content
-    dom = etree.HTML(response.content)
-
-    name = get_bill_name(dom, name_xpath)
-    bill_text = get_bill_text(dom, bill_xpath)
-    date = get_bill_buy_date(dom, buy_date_xpath, "%d.%m.%Y.", "%Y-%m-%d")
-    items = get_bill_items(dom, token_xpath, token_search, invoce_xpath)
-    price = get_bill_price(dom, price_xpath)
-    
     currency = "rsd"
     country = "serbia"
 
@@ -64,6 +73,7 @@ def get_bill_items(dom: str, token_xpath: str, token_search: str, invoce_xpath: 
     post_r = requests.post("https://suf.purs.gov.rs//specifications", data=data_post)
     sleep(0.2)
     post_r = requests.post("https://suf.purs.gov.rs//specifications", data=data_post)
+    print(post_r)
     json_data = json.loads(post_r.content.decode("utf-8"))
     if json_data.get("Success") == False:
         LOGGER.info("Items was not fetched.")
@@ -88,7 +98,10 @@ def get_bill_items(dom: str, token_xpath: str, token_search: str, invoce_xpath: 
         )
     return items
 
-def get_bill_buy_date(dom: str, buy_date_xpath: str, date_format_parse: str, date_format_output: str) -> str:
+
+def get_bill_buy_date(
+    dom: str, buy_date_xpath: str, date_format_parse: str, date_format_output: str
+) -> str:
     re_site_junk = re.compile(r"\r\n\s+")
     buy_date = dom.xpath(buy_date_xpath)[0].text
     buy_date = re_site_junk.sub("", buy_date)
@@ -97,10 +110,12 @@ def get_bill_buy_date(dom: str, buy_date_xpath: str, date_format_parse: str, dat
     date = strftime(date_format_output, buy_date)
     return date
 
+
 def get_bill_price(dom: str, price_xpath: str) -> float:
     price = dom.xpath(price_xpath)[0].text
     price = float(price.replace(".", "").replace(",", "."))
     return price
+
 
 def get_bill_text(dom: str, bill_text_xpath: str) -> str:
     bill = dom.xpath(bill_text_xpath)
@@ -109,5 +124,17 @@ def get_bill_text(dom: str, bill_text_xpath: str) -> str:
         bill_text = bill[0].text
     return bill_text
 
+
 def get_bill_name(dom: str, bill_name_xpath: str) -> str:
-    return dom.xpath(bill_name_xpath)[0].text
+    return dom.xpath(bill_name_xpath)[0].text.replace('  ', ' ')
+
+
+def get_dom(link: str) -> str:
+    LOGGER = get_logger(__name__)
+
+    response = requests.get(link, timeout=60)
+    LOGGER.info("status code: {}".format(response.status_code))
+
+    # Parse the HTML content
+    dom = etree.HTML(response.content)
+    return dom
