@@ -1,5 +1,6 @@
 import re
 import json
+from typing import List
 import requests
 from time import strptime, strftime, sleep
 from lxml import etree
@@ -54,7 +55,7 @@ def get_bill_info(link: str) -> tuple:
     return (name, date, price, currency, country, bill_text, items)
 
 
-def get_bill_items(dom: str, token_xpath: str, token_search: str, invoce_xpath: str):
+def get_bill_items(dom: str, token_xpath: str, token_search: str, invoce_xpath: str) -> List[Item]:
     """_summary_
 
     Args:
@@ -74,7 +75,11 @@ def get_bill_items(dom: str, token_xpath: str, token_search: str, invoce_xpath: 
     sleep(0.2)
     post_r = requests.post("https://suf.purs.gov.rs//specifications", data=data_post)
     print(post_r)
-    json_data = json.loads(post_r.content.decode("utf-8"))
+    try:
+        json_data = json.loads(post_r.content.decode("utf-8"))
+    except:
+        LOGGER.error("Problem on json load from items POST.")
+        return []
     if json_data.get("Success") == False:
         LOGGER.info("Items was not fetched.")
         LOGGER.info("Retring...")
