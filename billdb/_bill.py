@@ -168,7 +168,15 @@ class Bill:
 
         self.dup_list = Bill.cursor.fetchall()
 
-    def from_qr(self, link) -> object:
+    def from_qr(self, link: str, force_dup: bool = False) -> object:
+        # checking duplicates
+        self.check_duplicates()
+        if len(self.dup_list) and not force_dup:
+            Bill.LOGGER.info(
+                f"Maybe duplicates ({len(self.dup_list)}). Nothing was changed."
+            )
+            return
+
         if re.match(r"https://suf.purs.gov.rs", link):
             Bill.LOGGER.debug("using serbian parser.")
             # name, date, price, currency, country, bill_text, items
