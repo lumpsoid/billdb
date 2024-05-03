@@ -71,10 +71,10 @@ def get_bill_items(dom: str, token_xpath: str, token_search: str, invoce_xpath: 
     token = re.search(token_search, dom.xpath(token_xpath)[0].text).group(1)
     invoce_num = dom.xpath(invoce_xpath)[0].text.strip(" \r\n")
     data_post = {"invoiceNumber": invoce_num, "token": token}
+    # TODO data_post should be a params
     post_r = requests.post("https://suf.purs.gov.rs//specifications", data=data_post)
     sleep(0.2)
     post_r = requests.post("https://suf.purs.gov.rs//specifications", data=data_post)
-    print(post_r)
     try:
         json_data = json.loads(post_r.content.decode("utf-8"))
     except:
